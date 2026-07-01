@@ -1,0 +1,16 @@
+/Manifest*.toml
+/docs/Manifest*.toml
+/docs/build/
+
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Editor/IDE
+.vscode/
+.idea/
+*.sublime-*
