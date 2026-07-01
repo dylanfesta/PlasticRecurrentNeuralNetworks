@@ -13,7 +13,7 @@ makedocs(;
     authors="Dylan Festa <dylan.festa@gmail.com> and contributors",
     sitename="PlasticRecurrentNeuralNetworks.jl",
     format=Documenter.HTML(;
-        canonical="https://dylanfesta.github.io/PlasticRecurrentNeuralNetworks.jl",
+        canonical="https://dylanfesta.github.io/PlasticRecurrentNeuralNetworks",
         edit_link="main",
         assets=String[],
     ),
@@ -25,6 +25,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/dylanfesta/PlasticRecurrentNeuralNetworks.jl",
+    repo="github.com/dylanfesta/PlasticRecurrentNeuralNetworks.git",
     devbranch="main",
 )
