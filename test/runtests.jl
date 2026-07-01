@@ -176,6 +176,40 @@ using Test
     @test_throws MethodError PNN.RateLinearSynapses(3,2,weights)
   end
 
+  @testset "RateLinearSynapses forward signal accumulation" begin
+    weights = [
+      1.0 2.0 3.0
+      4.0 5.0 6.0
+    ]
+    synapse = PNN.RateLinearSynapses(weights)
+    post_population = PNN.LinearRateNeuralPopulation(
+      PNN.ExcitatoryRateNeuron(1.0;rate_saturation=100.0),
+      2,
+      initial_rates=0.0,
+    )
+    excitatory_pre = PNN.LinearRateNeuralPopulation(
+      PNN.ExcitatoryRateNeuron(1.0;rate_saturation=100.0),
+      3,
+      initial_rates=[0.5,1.0,2.0],
+    )
+    inhibitory_pre = PNN.LinearRateNeuralPopulation(
+      PNN.InhibitoryRateNeuron(1.0;rate_saturation=100.0),
+      3,
+      initial_rates=[0.5,1.0,2.0],
+    )
+
+    initial_input = [10.0,-3.0]
+    expected_drive = weights * excitatory_pre.rates_now
+
+    post_population.input_alloc .= initial_input
+    @test PNN.forward_signal!(0.0,0.1,post_population,synapse,excitatory_pre) === nothing
+    @test isapprox(post_population.input_alloc,initial_input + expected_drive)
+
+    post_population.input_alloc .= initial_input
+    @test PNN.forward_signal!(0.0,0.1,post_population,synapse,inhibitory_pre) === nothing
+    @test isapprox(post_population.input_alloc,initial_input - expected_drive)
+  end
+
   @testset "RCRate recorder" begin
     population = PNN.LinearRateNeuralPopulation(
       PNN.ExcitatoryRateNeuron(1.0;rate_saturation=100.0),
@@ -307,6 +341,17 @@ using Test
   end
 
   @testset "RateMeanEstimator" begin
+    mean_now = [1.0,2.0,3.0]
+    rates_now = [10.0,20.0,30.0]
+    propagation_factor = 0.75
+    @test PNN._update_rate_mean!(mean_now,rates_now,propagation_factor) === nothing
+    @test isapprox(
+      mean_now,
+      propagation_factor .* [1.0,2.0,3.0] .+
+        (1.0 - propagation_factor) .* rates_now;
+      rtol=1e-12,
+    )
+
     population = PNN.LinearRateNeuralPopulation(
       PNN.ExcitatoryRateNeuron(1.0;rate_saturation=100.0),
       2,
@@ -343,6 +388,33 @@ using Test
   end
 
   @testset "RateCovarianceEstimator" begin
+    second_moment_now = [
+      1.0 2.0 3.0
+      4.0 5.0 6.0
+    ]
+    covariance_now = fill(NaN,2,3)
+    post_rates = [10.0,20.0]
+    pre_rates = [1.0,2.0,3.0]
+    post_means = [3.0,4.0]
+    pre_means = [0.5,1.0,1.5]
+    propagation_factor = 0.75
+    second_moment_initial = copy(second_moment_now)
+    second_moment_expected = propagation_factor .* second_moment_initial .+
+      (1.0 - propagation_factor) .* (post_rates * pre_rates')
+    covariance_expected = second_moment_expected .- post_means * pre_means'
+
+    @test PNN._update_rate_covariance!(
+      second_moment_now,
+      covariance_now,
+      post_rates,
+      pre_rates,
+      post_means,
+      pre_means,
+      propagation_factor,
+    ) === nothing
+    @test isapprox(second_moment_now,second_moment_expected; rtol=1e-12)
+    @test isapprox(covariance_now,covariance_expected; rtol=1e-12)
+
     post_population = PNN.LinearRateNeuralPopulation(
       PNN.ExcitatoryRateNeuron(1.0;rate_saturation=100.0),
       2,
@@ -465,6 +537,84 @@ using Test
       tau_covariance,
       dt_trace,
     )
+  end
+
+  @testset "Rate plasticity update kernels" begin
+    homeostatic_weights = [
+      0.0  1.0
+      2.0  0.0
+    ]
+    @test PNN._update_homeostatic_scaling!(
+      homeostatic_weights,
+      [2.0,4.0],
+      [1.0,5.0],
+      3.0,
+      0.1,
+      0.1,
+      10.0,
+    ) === nothing
+    @test isapprox(homeostatic_weights,[0.0 1.4; 0.4 0.0]; rtol=1e-12)
+
+    covariance = [
+      2.0  -1.0  -100.0
+      0.5   1.5    -2.0
+    ]
+    covariance_weights = [
+      1.0  0.0  1.0
+      2.0  3.0  4.0
+    ]
+    @test PNN._update_covariance_plasticity!(
+      covariance_weights,
+      covariance,
+      0.5,
+      0.02,
+      0.1,
+      3.01,
+    ) === nothing
+    @test isapprox(covariance_weights,[
+      1.03  0.0   0.1
+      2.0   3.01  3.01
+    ]; rtol=1e-12)
+
+    scaled_weights = [
+      1.0  0.0  1.0
+      2.0  3.0  4.0
+    ]
+    scale_matrix = [
+      1.0  0.0  2.0
+      0.5  3.0  0.25
+    ]
+    @test PNN._update_scaled_covariance_plasticity!(
+      scaled_weights,
+      covariance,
+      scale_matrix,
+      0.5,
+      0.02,
+      0.1,
+      3.01,
+    ) === nothing
+    @test isapprox(scaled_weights,[
+      1.03   0.0   0.1
+      2.0    3.01  3.01
+    ]; rtol=1e-12)
+
+    quadratic_weights = [
+      1.0  0.0  1.0
+      2.0  3.0  4.0
+    ]
+    @test PNN._update_quadratic_covariance_plasticity!(
+      quadratic_weights,
+      covariance,
+      -0.5,
+      0.25,
+      0.02,
+      0.1,
+      3.01,
+    ) === nothing
+    @test isapprox(quadratic_weights,[
+      0.985  0.0   2.005
+      2.015  3.01  3.01
+    ]; rtol=1e-12)
   end
 
   @testset "RatePlasticityHomeostaticScaling" begin
