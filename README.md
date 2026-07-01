@@ -6,4 +6,8 @@
 [![Build Status](https://github.com/dylanfesta/PlasticRecurrentNeuralNetworks/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/dylanfesta/PlasticRecurrentNeuralNetworks/actions/workflows/CI.yml?query=branch%3Amain)
 
 
-TO-DO
+Simulation of rate-based neural networks subject to plasticity based plasticity rules.
+
+> [!CAUTION]
+> This repository is still in active development. Check the examples in the documentation
+> for usage.
